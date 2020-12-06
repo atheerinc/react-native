@@ -50,6 +50,8 @@ public final class WebSocketModule extends ReactContextBaseJavaModule {
   private final Map<Integer, WebSocket> mWebSocketConnections = new ConcurrentHashMap<>();
   private final Map<Integer, ContentHandler> mContentHandlers = new ConcurrentHashMap<>();
 
+  private static @Nullable CustomClientBuilder customClientBuilder = null;
+
   private ReactContext mReactContext;
   private ForwardingCookieHandler mCookieHandler;
 
@@ -63,6 +65,20 @@ public final class WebSocketModule extends ReactContextBaseJavaModule {
     mReactContext
         .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
         .emit(eventName, params);
+  }
+
+  public static void setCustomClientBuilder(CustomClientBuilder ccb) {
+    customClientBuilder = ccb;
+  }
+
+  public static interface CustomClientBuilder {
+    public void apply(OkHttpClient.Builder builder);
+  }
+
+  private static void applyCustomBuilder(OkHttpClient.Builder builder) {
+    if (customClientBuilder != null) {
+      customClientBuilder.apply(builder);
+    }
   }
 
   @Override
@@ -84,12 +100,14 @@ public final class WebSocketModule extends ReactContextBaseJavaModule {
       @Nullable final ReadableArray protocols,
       @Nullable final ReadableMap options,
       final int id) {
-    OkHttpClient client =
-        new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(0, TimeUnit.MINUTES) // Disable timeouts for read
-            .build();
+    OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder()
+          .connectTimeout(10, TimeUnit.SECONDS)
+          .writeTimeout(10, TimeUnit.SECONDS)
+          .readTimeout(0, TimeUnit.MINUTES); // Disable timeouts for read
+
+    applyCustomBuilder(clientBuilder);
+
+    OkHttpClient client = clientBuilder.build();
 
     Request.Builder builder = new Request.Builder().tag(id).url(url);
 
